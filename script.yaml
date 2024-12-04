@@ -1,0 +1,185 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Core infrastructure for ECS deployment with 2 public and 2 private subnets, using resources prefixed with "patel"
+
+Parameters:
+  VPCCIDR:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: CIDR block for the VPC
+
+  PublicSubnetCIDR1:
+    Type: String
+    Default: "10.0.1.0/24"
+    Description: CIDR block for the first public subnet
+
+  PublicSubnetCIDR2:
+    Type: String
+    Default: "10.0.2.0/24"
+    Description: CIDR block for the second public subnet
+
+  PrivateSubnetCIDR1:
+    Type: String
+    Default: "10.0.3.0/24"
+    Description: CIDR block for the first private subnet
+
+  PrivateSubnetCIDR2:
+    Type: String
+    Default: "10.0.4.0/24"
+    Description: CIDR block for the second private subnet
+
+  InstanceType:
+    Type: String
+    Default: "t2.micro"
+    Description: EC2 instance type for the ECS service
+
+Resources:
+  # Create VPC
+  PatelVPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - Key: Name
+          Value: "patel-vpc"
+
+  # Create First Public Subnet
+  PatelPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PatelVPC
+      CidrBlock: !Ref PublicSubnetCIDR1
+      AvailabilityZone: "ca-central-1a"
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: "patel-public-subnet-1"
+
+  # Create Second Public Subnet
+  PatelPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PatelVPC
+      CidrBlock: !Ref PublicSubnetCIDR2
+      AvailabilityZone: "ca-central-1b"
+      MapPublicIpOnLaunch: "true"
+      Tags:
+        - Key: Name
+          Value: "patel-public-subnet-2"
+
+  # Create First Private Subnet
+  PatelPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PatelVPC
+      CidrBlock: !Ref PrivateSubnetCIDR1
+      AvailabilityZone: "ca-central-1a"
+      Tags:
+        - Key: Name
+          Value: "patel-private-subnet-1"
+
+  # Create Second Private Subnet
+  PatelPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PatelVPC
+      CidrBlock: !Ref PrivateSubnetCIDR2
+      AvailabilityZone: "ca-central-1b"
+      Tags:
+        - Key: Name
+          Value: "patel-private-subnet-2"
+
+  # Create Internet Gateway
+  PatelInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: "patel-igw"
+
+  AttachPatelGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref PatelVPC
+      InternetGatewayId: !Ref PatelInternetGateway
+
+  # Create Security Group
+  PatelSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow inbound HTTP, HTTPS, and SSH"
+      VpcId: !Ref PatelVPC
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: "80"
+          ToPort: "80"
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: "443"
+          ToPort: "443"
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "tcp"
+          FromPort: "22"
+          ToPort: "22"
+
+  # Create Load Balancer
+  PatelLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "patel-app-lb"
+      Subnets:
+        - Ref: PatelPublicSubnet1
+        - Ref: PatelPublicSubnet2
+      SecurityGroups:
+        - Ref: PatelSecurityGroup
+      Scheme: "internet-facing"
+      LoadBalancerAttributes:
+        - Key: "idle_timeout.timeout_seconds"
+          Value: "60"
+      Type: "application"
+
+  # Create Target Group
+  PatelTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "patel-app-target-group"
+      Port: 80
+      Protocol: "HTTP"
+      VpcId: !Ref PatelVPC
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: "80"
+      HealthCheckPath: "/"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      HealthyThresholdCount: 5
+
+Outputs:
+  VPCId:
+    Description: "VPC ID"
+    Value: !Ref PatelVPC
+
+  PatelPublicSubnet1Id:
+    Description: "Public Subnet 1 ID"
+    Value: !Ref PatelPublicSubnet1
+
+  PatelPublicSubnet2Id:
+    Description: "Public Subnet 2 ID"
+    Value: !Ref PatelPublicSubnet2
+
+  PatelPrivateSubnet1Id:
+    Description: "Private Subnet 1 ID"
+    Value: !Ref PatelPrivateSubnet1
+
+  PatelPrivateSubnet2Id:
+    Description: "Private Subnet 2 ID"
+    Value: !Ref PatelPrivateSubnet2
+
+  PatelLoadBalancerDNS:
+    Description: "Load Balancer DNS Name"
+    Value: !GetAtt PatelLoadBalancer.DNSName

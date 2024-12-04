@@ -1,0 +1,20 @@
+{
+    "family": "patel-app-task",
+    "networkMode": "awsvpc",
+    "containerDefinitions": [
+      {
+        "name": "python-api",
+        "image": "517391495810.dkr.ecr.ca-central-1.amazonaws.com/patel-app-repo:latest",
+        "memory": 512,
+        "cpu": 256,
+        "essential": true,
+        "portMappings": [
+          {
+            "containerPort": 5000,
+            "hostPort": 5000
+          }
+        ]
+      }
+    ]
+  }
+  
